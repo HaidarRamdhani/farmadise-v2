@@ -25,6 +25,16 @@ def login(username, password):
         return True
     return False
 
+def signup(username, password):
+    response = requests.post(
+        f"{BACKEND_URL}/api/signup/",
+        json={"username": username, "password": password}
+    )
+    if response.status_code == 200:
+        st.success("Akun berhasil dibuat! Silakan login.")
+        return True
+    return False
+
 def main_app():
     st.sidebar.write(f"Logged in as: {st.session_state.username} ({st.session_state.role})")
     if st.sidebar.button("Logout"):
@@ -84,3 +94,12 @@ else:
                 st.experimental_rerun()
             else:
                 st.error("Invalid credentials")
+    
+    st.write("Belum memiliki akun?")
+    if st.button("Daftar di sini"):
+        with st.form("signup_form"):
+            new_username = st.text_input("New Username")
+            new_password = st.text_input("New Password", type="password")
+            if st.form_submit_button("Sign Up"):
+                if signup(new_username, new_password):
+                    st.experimental_rerun()
