@@ -2,15 +2,17 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 import pytz
-from database import SessionLocal, engine
+from database import SessionLocal, engine, Base  # Pastikan Base diimpor
 from models import Response, User
 from sentiment import classify_sentiment
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional
+import bcrypt
 
 app = FastAPI()
 
+# Inisialisasi tabel di database
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -27,7 +29,7 @@ class UserLogin(BaseModel):
 class ResponseCreate(BaseModel):
     jawaban: str
 
-# Koneksi database
+# Dependency database
 def get_db():
     db = SessionLocal()
     try:
@@ -35,20 +37,41 @@ def get_db():
     finally:
         db.close()
 
-# Autentikasi
+# Verifikasi password
 def verify_password(plain_password: str, password_hash: str):
     return bcrypt.checkpw(plain_password.encode(), password_hash.encode())
 
+# Autentikasi pengguna
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
         return False
     return user
 
+# Membuat token JWT
 def create_access_token(data: dict):
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
-# Endpoints
+# Mendapatkan pengguna saat ini dari token
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+# Endpoint login
 @app.post("/api/login/")
 async def login(user: UserLogin, db: Session = Depends(get_db)):
     user = authenticate_user(db, user.username, user.password)
@@ -57,6 +80,7 @@ async def login(user: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": user.username})
     return {"access_token": access_token, "role": user.role}
 
+# Endpoint untuk menyimpan respons
 @app.post("/api/responses/")
 async def create_response(
     response: ResponseCreate,
@@ -76,6 +100,7 @@ async def create_response(
     db.commit()
     return {"status": "success"}
 
+# Endpoint untuk mendapatkan semua respons
 @app.get("/api/responses/")
 async def get_responses(db: Session = Depends(get_db)):
     responses = db.query(Response).all()
@@ -88,4 +113,3 @@ async def get_responses(db: Session = Depends(get_db)):
             "username": r.username
         } for r in responses
     ]
-
