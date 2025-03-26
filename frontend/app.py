@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 import pytz
 
-BACKEND_URL = "http://localhost:8000"  # Ganti dengan URL backend saat deploy
+BACKEND_URL = "https://farmadise-v2-production.up.railway.app"  # Ganti dengan URL backend saat deploy
 
 # Session state
 if 'access_token' not in st.session_state:
