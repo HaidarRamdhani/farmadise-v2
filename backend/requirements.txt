@@ -11,3 +11,4 @@ rapidfuzz
 scikit-learn
 pandas
 pytz
+torch>=2.0.0
