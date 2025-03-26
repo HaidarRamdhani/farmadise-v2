@@ -17,8 +17,12 @@ import bcrypt
 async def lifespan(app: FastAPI):
     # Create database tables on startup
     Base.metadata.create_all(bind=engine)
-    yield
-    # Add cleanup code here if needed (e.g., close connections)
+    db = SessionLocal()
+    try:
+        create_admin_account(db)  # Pastikan akun admin dibuat
+        yield
+    finally:
+        db.close()
 
 # Initialize FastAPI with lifespan
 app = FastAPI(lifespan=lifespan)
@@ -77,6 +81,20 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
+# Buat akun admin otomatis
+def create_admin_account(db: Session):
+    admin_username = "AdminSEC"
+    admin_password = "BismillahJuara"
+    admin = db.query(User).filter(User.username == admin_username).first()
+    if not admin:
+        password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
+        admin_user = User(username=admin_username, password_hash=password_hash, role="admin")
+        db.add(admin_user)
+        db.commit()
+        print("Akun admin berhasil dibuat!")
+    else:
+        print("Akun admin sudah ada.")
+
 # Endpoint login
 @app.post("/api/login/")
 async def login(user: UserLogin, db: Session = Depends(get_db)):
@@ -119,3 +137,16 @@ async def get_responses(db: Session = Depends(get_db)):
             "username": r.username
         } for r in responses
     ]
+
+# Endpoint signup
+@app.post("/api/signup/")
+async def signup(username: str, password: str, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    new_user = User(username=username, password_hash=password_hash, role="user")
+    db.add(new_user)
+    db.commit()
+    return {"message": "User created successfully"}
