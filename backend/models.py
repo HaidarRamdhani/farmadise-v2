@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime
-from database import Base
+from database import Base  # Import Base dari database.py
 
 class Response(Base):
     __tablename__ = "responses"
@@ -15,5 +15,3 @@ class User(Base):
     username = Column(String, unique=True)
     password_hash = Column(String)
     role = Column(String)
-
-Base.metadata.create_all(bind=engine)
