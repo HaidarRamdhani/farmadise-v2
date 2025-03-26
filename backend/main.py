@@ -2,20 +2,24 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 import pytz
-from database import SessionLocal, engine, Base  # Pastikan Base diimpor
+from database import SessionLocal, engine, Base
 from models import Response, User
 from sentiment import classify_sentiment
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional
-import bcrypt
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-
-# Inisialisasi tabel di database
-@app.on_event("startup")
-def startup():
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create database tables on startup
     Base.metadata.create_all(bind=engine)
+    yield
+    # Add cleanup code here if needed (e.g., close connections)
+
+# Initialize FastAPI with lifespan
+app = FastAPI(lifespan=lifespan)
 
 # Secret key untuk JWT (ganti dengan nilai random)
 SECRET_KEY = "cc8168b20805ae985206d849d0c9ddd3"
@@ -37,18 +41,16 @@ def get_db():
     finally:
         db.close()
 
-# Verifikasi password
+# Autentikasi
 def verify_password(plain_password: str, password_hash: str):
     return bcrypt.checkpw(plain_password.encode(), password_hash.encode())
 
-# Autentikasi pengguna
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(User).filter(User.username == username).first()
     if not user or not verify_password(password, user.password_hash):
         return False
     return user
 
-# Membuat token JWT
 def create_access_token(data: dict):
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
