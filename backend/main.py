@@ -9,6 +9,8 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional
 from contextlib import asynccontextmanager
+from fastapi.security import OAuth2PasswordBearer
+import bcrypt
 
 # Lifespan event handler
 @asynccontextmanager
@@ -54,7 +56,6 @@ def authenticate_user(db: Session, username: str, password: str):
 def create_access_token(data: dict):
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
-from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login/")
 
 # Mendapatkan pengguna saat ini dari token
