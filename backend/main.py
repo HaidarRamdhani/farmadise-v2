@@ -11,8 +11,12 @@ from typing import Optional
 
 app = FastAPI()
 
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
+
 # Secret key untuk JWT (ganti dengan nilai random)
-SECRET_KEY = "your-secret-key"
+SECRET_KEY = "cc8168b20805ae985206d849d0c9ddd3"
 ALGORITHM = "HS256"
 
 # Model Pydantic untuk autentikasi
@@ -84,3 +88,4 @@ async def get_responses(db: Session = Depends(get_db)):
             "username": r.username
         } for r in responses
     ]
+
