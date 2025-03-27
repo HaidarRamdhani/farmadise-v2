@@ -27,6 +27,12 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI with lifespan
 app = FastAPI(lifespan=lifespan)
 
+if __name__ == "__main__":
+    import uvicorn
+    # Baca port dari environment variable atau gunakan default 8080
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
 # Secret key untuk JWT (ganti dengan nilai random)
 SECRET_KEY = "cc8168b20805ae985206d849d0c9ddd3"
 ALGORITHM = "HS256"
