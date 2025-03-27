@@ -23,6 +23,7 @@ def login(username, password):
         st.session_state.role = data["role"]
         st.session_state.username = username
         return True
+    st.error(f"Login failed: {response.json().get('detail', 'Unknown error')}")
     return False
 
 def signup(username, password):
@@ -33,6 +34,7 @@ def signup(username, password):
     if response.status_code == 200:
         st.success("Akun berhasil dibuat! Silakan login.")
         return True
+    st.error(f"Sign up failed: {response.json().get('detail', 'Unknown error')}")
     return False
 
 def main_app():
@@ -49,15 +51,18 @@ def main_app():
     with tab_home:
         st.header("Home")
         response = requests.get(f"{BACKEND_URL}/api/responses/")
-        data = response.json()
-        for item in reversed(data):
-            st.markdown(f"""
-            <div style='background-color: #333; padding: 10px; margin: 5px; border-radius: 5px;'>
-                <strong>{item['username']}</strong><br>
-                <span style='font-size: 12px;'>{item['tanggal']}</span><br>
-                {item['jawaban']}
-            </div>
-            """, unsafe_allow_html=True)
+        if response.status_code == 200:
+            data = response.json()
+            for item in reversed(data):
+                st.markdown(f"""
+                <div style='background-color: #333; padding: 10px; margin: 5px; border-radius: 5px;'>
+                    <strong>{item['username']}</strong><br>
+                    <span style='font-size: 12px;'>{item['tanggal']}</span><br>
+                    {item['jawaban']}
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.error("Failed to fetch responses.")
 
     # Tab Update
     with tab_update:
@@ -80,6 +85,8 @@ def main_app():
                 if response.status_code == 200:
                     st.success("Data tersimpan!")
                     st.experimental_rerun()
+                else:
+                    st.error(f"Failed to save data: {response.json().get('detail', 'Unknown error')}")
 
 # Jalankan aplikasi
 if st.session_state.access_token:
@@ -92,8 +99,6 @@ else:
         if st.form_submit_button("Login"):
             if login(username, password):
                 st.experimental_rerun()
-            else:
-                st.error("Invalid credentials")
     
     st.write("Belum memiliki akun?")
     if st.button("Daftar di sini"):
