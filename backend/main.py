@@ -11,6 +11,7 @@ from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi.security import OAuth2PasswordBearer
 import bcrypt
+import os
 
 # Lifespan event handler
 @asynccontextmanager
