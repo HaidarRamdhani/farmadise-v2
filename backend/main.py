@@ -13,6 +13,20 @@ from fastapi.security import OAuth2PasswordBearer
 import bcrypt
 import os
 
+# Buat akun admin otomatis
+def create_admin_account(db: Session):
+    admin_username = "AdminSEC"
+    admin_password = "BismillahJuara"
+    admin = db.query(User).filter(User.username == admin_username).first()
+    if not admin:
+        password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
+        admin_user = User(username=admin_username, password_hash=password_hash, role="admin")
+        db.add(admin_user)
+        db.commit()
+        print("Akun admin berhasil dibuat!")
+    else:
+        print("Akun admin sudah ada.")
+
 # Lifespan event handler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -87,20 +101,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
-
-# Buat akun admin otomatis
-def create_admin_account(db: Session):
-    admin_username = "AdminSEC"
-    admin_password = "BismillahJuara"
-    admin = db.query(User).filter(User.username == admin_username).first()
-    if not admin:
-        password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
-        admin_user = User(username=admin_username, password_hash=password_hash, role="admin")
-        db.add(admin_user)
-        db.commit()
-        print("Akun admin berhasil dibuat!")
-    else:
-        print("Akun admin sudah ada.")
 
 # Endpoint login
 @app.post("/api/login/")
