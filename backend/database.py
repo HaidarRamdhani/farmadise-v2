@@ -1,9 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import os
 
 # URL PostgreSQL (ganti dengan URL database Anda)
-DATABASE_URL = "postgresql://postgres:umyEkSjrtFEFAkAcWthrmKtEjrutlXGd@postgres.railway.internal:5432/railway"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Inisialisasi engine
 engine = create_engine(DATABASE_URL)
