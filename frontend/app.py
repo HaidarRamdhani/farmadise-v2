@@ -127,17 +127,47 @@ def main_app():
     # Tab Daily Dashboard
     with tab_dashboard:
         st.header("Daily Dashboard")
+
+        # Ambil data dari backend
         response = requests.get(f"{BACKEND_URL}/api/responses/")
         if response.status_code == 200:
             data = response.json()
-            if data:
-                df = pd.DataFrame(data)
-                st.write("Summary of Responses:")
-                st.dataframe(df)
+            df = pd.DataFrame(data)
+
+            if not df.empty:
+                # Proses data untuk time series
+                df['tanggal'] = pd.to_datetime(df['tanggal']).dt.date
+                daily_sentiment = df.groupby('tanggal')['sentimen_negatif'].sum().reset_index()
+
+                # Deteksi anomali
+                daily_sentiment['anomaly'] = 0  # Default: bukan anomali
+                anomalies = detect_anomalies(daily_sentiment.copy())
+                daily_sentiment.loc[anomalies[anomalies['anomaly'] == 1].index, 'anomaly'] = 1
+
+                # Visualisasi dengan Plotly
+                fig = px.line(
+                    daily_sentiment,
+                    x='tanggal',
+                    y='sentimen_negatif',
+                    title="Frekuensi Sentimen Negatif Harian",
+                    labels={'sentimen_negatif': 'Jumlah Sentimen Negatif', 'tanggal': 'Tanggal'}
+                )
+
+                # Sorot anomali
+                fig.add_scatter(
+                    x=daily_sentiment[daily_sentiment['anomaly'] == 1]['tanggal'],
+                    y=daily_sentiment[daily_sentiment['anomaly'] == 1]['sentimen_negatif'],
+                    mode='markers',
+                    marker=dict(color='red', size=10),
+                    name='Anomali'
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No responses found.")
         else:
             st.error("Failed to fetch dashboard data.")
+
 
     # Tab Database
     with tab_database:
