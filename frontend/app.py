@@ -66,7 +66,7 @@ def main_app():
     st.sidebar.write(f"Logged in as: {st.session_state.username} ({st.session_state.role})")
     if st.sidebar.button("Logout"):
         st.session_state.access_token = None
-        st.experimental_rerun()
+        st.rerun()
 
     tab_home, tab_profile, tab_update, tab_dashboard, tab_database = st.tabs(
         ["Home", "My Profile", "Update", "Daily Dashboard", "Database"]
@@ -113,7 +113,7 @@ def main_app():
                 log_response(response)
                 if response.status_code == 200:
                     st.success("Data tersimpan!")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     try:
                         error_message = response.json().get("detail", "Unknown error")
@@ -140,4 +140,4 @@ else:
             new_password = st.text_input("New Password", type="password")
             if st.form_submit_button("Sign Up"):
                 if signup(new_username, new_password):
-                    st.experimental_rerun()
+                    st.rerun()
