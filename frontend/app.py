@@ -5,9 +5,6 @@ from datetime import datetime
 import pytz
 import logging
 
-# Konfigurasi logging
-logging.basicConfig(level=logging.INFO)
-
 # Backend URL
 BACKEND_URL = "https://farmadise-v2-production.up.railway.app"
 
@@ -63,11 +60,13 @@ def signup(username, password):
 
 # Main app
 def main_app():
+    # Sidebar
     st.sidebar.write(f"Logged in as: {st.session_state.username} ({st.session_state.role})")
     if st.sidebar.button("Logout"):
         st.session_state.access_token = None
         st.rerun()
 
+    # Tabs
     tab_home, tab_profile, tab_update, tab_dashboard, tab_database = st.tabs(
         ["Home", "My Profile", "Update", "Daily Dashboard", "Database"]
     )
@@ -76,7 +75,6 @@ def main_app():
     with tab_home:
         st.header("Home")
         response = requests.get(f"{BACKEND_URL}/api/responses/")
-        log_response(response)
         if response.status_code == 200:
             data = response.json()
             for item in reversed(data):
@@ -89,6 +87,15 @@ def main_app():
                 """, unsafe_allow_html=True)
         else:
             st.error("Failed to fetch responses.")
+
+    # Tab My Profile
+    with tab_profile:
+        st.header("My Profile")
+        if st.session_state.username:
+            st.write(f"Username: {st.session_state.username}")
+            st.write(f"Role: {st.session_state.role}")
+        else:
+            st.warning("You are not logged in.")
 
     # Tab Update
     with tab_update:
@@ -110,16 +117,42 @@ def main_app():
                     },
                     headers=headers
                 )
-                log_response(response)
                 if response.status_code == 200:
                     st.success("Data tersimpan!")
                     st.rerun()
                 else:
-                    try:
-                        error_message = response.json().get("detail", "Unknown error")
-                        st.error(f"Failed to save data: {error_message}")
-                    except ValueError:
-                        st.error("Invalid response from server.")
+                    error_message = response.json().get("detail", "Unknown error")
+                    st.error(f"Failed to save data: {error_message}")
+
+    # Tab Daily Dashboard
+    with tab_dashboard:
+        st.header("Daily Dashboard")
+        response = requests.get(f"{BACKEND_URL}/api/responses/")
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                df = pd.DataFrame(data)
+                st.write("Summary of Responses:")
+                st.dataframe(df)
+            else:
+                st.info("No responses found.")
+        else:
+            st.error("Failed to fetch dashboard data.")
+
+    # Tab Database
+    with tab_database:
+        st.header("Database Overview")
+        response = requests.get(f"{BACKEND_URL}/api/responses/")
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                df = pd.DataFrame(data)
+                st.write("All Records in Database:")
+                st.dataframe(df)
+            else:
+                st.info("Database is empty.")
+        else:
+            st.error("Failed to fetch database data.")
 
 # Run the app
 if st.session_state.access_token:
@@ -132,12 +165,3 @@ else:
         if st.form_submit_button("Login"):
             if login(username, password):
                 st.rerun()
-    
-    st.write("Belum memiliki akun?")
-    if st.button("Daftar di sini"):
-        with st.form("signup_form"):
-            new_username = st.text_input("New Username")
-            new_password = st.text_input("New Password", type="password")
-            if st.form_submit_button("Sign Up"):
-                if signup(new_username, new_password):
-                    st.rerun()
