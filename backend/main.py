@@ -92,8 +92,9 @@ def create_admin_account(db: Session):
     admin_password = "BismillahJuara"
     admin = db.query(User).filter(User.username == admin_username).first()
     if not admin:
+        # Pastikan password hash dibuat dengan benar
         password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
-        admin_user = User(username=admin_username, password_hash=password_hash, role="admin")
+        admin_user = User(username=admin_username, password_hash=password_hash.decode(), role="admin")
         db.add(admin_user)
         db.commit()
         logging.info("Akun admin berhasil dibuat!")
