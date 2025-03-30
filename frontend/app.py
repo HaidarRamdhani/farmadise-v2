@@ -4,6 +4,7 @@ import requests
 from datetime import datetime
 import pytz
 import logging
+import plotly.express as px
 
 # Backend URL
 BACKEND_URL = "https://farmadise-v2-production.up.railway.app"
