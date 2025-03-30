@@ -7,7 +7,7 @@ import os
 import logging
 from database import SessionLocal, engine, Base
 from models import Response, User
-from sentiment import classify_sentiment
+from sentiment import classify_sentiment, detect_anomalies  # Impor fungsi detect_anomalies
 from jose import JWTError, jwt
 from pydantic import BaseModel, constr, field_validator
 from typing import Optional
@@ -15,7 +15,6 @@ import pandas as pd
 from contextlib import asynccontextmanager
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import APIRouter
 import bcrypt
 
 # Konfigurasi logging
@@ -117,11 +116,8 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI with lifespan
 app = FastAPI(lifespan=lifespan)
 
-# Inisialisasi APIRouter dengan prefix /api
-router = APIRouter(prefix="/api")
-
 # Endpoint login
-@router.post("/login/")
+@app.post("/api/login/")
 async def login(user: UserLogin, db: Session = Depends(get_db)):
     """
     Authenticate user and generate JWT token.
@@ -139,7 +135,7 @@ async def login(user: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": access_token, "role": user.role}
 
 # Endpoint untuk menyimpan respons
-@router.post("/responses/")
+@app.post("/api/responses/")
 async def create_response(
     response: ResponseCreate,
     db: Session = Depends(get_db),
@@ -167,7 +163,7 @@ async def create_response(
         raise HTTPException(status_code=500, detail="Database error occurred")
 
 # Endpoint untuk mendapatkan semua respons
-@router.get("/responses/")
+@app.get("/api/responses/")
 async def get_responses(db: Session = Depends(get_db)):
     """
     Retrieve all responses from the database.
@@ -185,7 +181,7 @@ async def get_responses(db: Session = Depends(get_db)):
     ]
 
 # Endpoint signup
-@router.post("/signup/")
+@app.post("/api/signup/")
 async def signup(request: SignUpRequest, db: Session = Depends(get_db)):
     """
     Register a new user.
@@ -197,10 +193,40 @@ async def signup(request: SignUpRequest, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt())
-    new_user = User(username=request.username, password_hash=password_hash, role="user")
+    new_user = User(username=request.username, password_hash=password_hash.decode(), role="user")
     db.add(new_user)
     db.commit()
     return {"message": "User created successfully"}
+
+# Endpoint daily dashboard
+@app.get("/api/daily-dashboard/")
+async def get_daily_dashboard(db: Session = Depends(get_db)):
+    """
+    Retrieve daily sentiment data with anomaly detection.
+    Returns a list of daily sentiment records with anomaly flags.
+    """
+    responses = db.query(Response).all()
+    if not responses:
+        return []
+
+    # Konversi data ke DataFrame
+    data = [
+        {
+            "tanggal": r.tanggal.date(),
+            "sentimen_negatif": r.sentimen_negatif,
+        } for r in responses
+    ]
+    df = pd.DataFrame(data)
+
+    if df.empty:
+        return []
+
+    # Deteksi anomali
+    anomalies = detect_anomalies(df.copy())
+    anomalies["anomaly"] = anomalies["anomaly"].astype(int)
+
+    # Kembalikan hasil sebagai list dictionary
+    return anomalies.to_dict(orient="records")
 
 # Handler untuk root dan favicon
 @app.get("/")
@@ -210,25 +236,6 @@ async def root():
 @app.get("/favicon.ico")
 async def favicon():
     return {"message": "No favicon available."}
-
-@app.get("/api/daily-dashboard/")
-async def get_daily_dashboard(db: Session = Depends(get_db)):
-    responses = db.query(Response).all()
-    data = [
-        {
-            "tanggal": r.tanggal.date(),
-            "sentimen_negatif": r.sentimen_negatif,
-        } for r in responses
-    ]
-    df = pd.DataFrame(data)
-    if not df.empty:
-        anomalies = detect_anomalies(df.copy())
-        df["anomaly"] = anomalies["anomaly"]
-        return df.to_dict(orient="records")
-    return []
-
-# Tambahkan router ke aplikasi FastAPI
-app.include_router(router)
 
 # Error handling global
 @app.exception_handler(Exception)
