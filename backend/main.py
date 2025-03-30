@@ -210,6 +210,22 @@ async def root():
 async def favicon():
     return {"message": "No favicon available."}
 
+@app.get("/api/daily-dashboard/")
+async def get_daily_dashboard(db: Session = Depends(get_db)):
+    responses = db.query(Response).all()
+    data = [
+        {
+            "tanggal": r.tanggal.date(),
+            "sentimen_negatif": r.sentimen_negatif,
+        } for r in responses
+    ]
+    df = pd.DataFrame(data)
+    if not df.empty:
+        anomalies = detect_anomalies(df.copy())
+        df["anomaly"] = anomalies["anomaly"]
+        return df.to_dict(orient="records")
+    return []
+
 # Tambahkan router ke aplikasi FastAPI
 app.include_router(router)
 
