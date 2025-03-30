@@ -11,7 +11,7 @@ from sentiment import classify_sentiment
 from jose import JWTError, jwt
 from pydantic import BaseModel, constr, field_validator
 from typing import Optional
-import panda as pd
+import pandas as pd
 from contextlib import asynccontextmanager
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.exc import SQLAlchemyError
