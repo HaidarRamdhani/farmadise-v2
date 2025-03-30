@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter
+import bcrypt
 
 # Konfigurasi logging
 logging.basicConfig(level=logging.INFO)
