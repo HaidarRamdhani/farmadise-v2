@@ -2,53 +2,23 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 import pytz
+import os
+import logging
 from database import SessionLocal, engine, Base
 from models import Response, User
 from sentiment import classify_sentiment
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, constr, validator
 from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi.security import OAuth2PasswordBearer
-import bcrypt
-import os
+from sqlalchemy.exc import SQLAlchemyError
+from fastapi import APIRouter
 
-# Buat akun admin otomatis
-def create_admin_account(db: Session):
-    admin_username = "AdminSEC"
-    admin_password = "BismillahJuara"
-    admin = db.query(User).filter(User.username == admin_username).first()
-    if not admin:
-        password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
-        admin_user = User(username=admin_username, password_hash=password_hash, role="admin")
-        db.add(admin_user)
-        db.commit()
-        print("Akun admin berhasil dibuat!")
-    else:
-        print("Akun admin sudah ada.")
+# Konfigurasi logging
+logging.basicConfig(level=logging.INFO)
 
-# Lifespan event handler
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Create database tables on startup
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        create_admin_account(db)  # Pastikan akun admin dibuat
-        yield
-    finally:
-        db.close()
-
-# Initialize FastAPI with lifespan
-app = FastAPI(lifespan=lifespan)
-
-if __name__ == "__main__":
-    import uvicorn
-    # Baca port dari environment variable atau gunakan default 8080
-    port = int(os.getenv("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
-# Secret key untuk JWT (ganti dengan nilai random)
+# Secret key untuk JWT (gunakan environment variable)
 SECRET_KEY = "cc8168b20805ae985206d849d0c9ddd3"
 ALGORITHM = "HS256"
 
@@ -59,6 +29,18 @@ class UserLogin(BaseModel):
 
 class ResponseCreate(BaseModel):
     jawaban: str
+
+class SignUpRequest(BaseModel):
+    username: constr(min_length=3, max_length=50)  # Minimal 3 karakter, maksimal 50 karakter
+    password: constr(min_length=8)  # Minimal 8 karakter
+
+    @validator("password")
+    def validate_password(cls, value):
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain at least one digit.")
+        if not any(char.isupper() for char in value):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        return value
 
 # Dependency database
 def get_db():
@@ -102,38 +84,91 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
+# Buat akun admin otomatis
+def create_admin_account(db: Session):
+    admin_username = "AdminSEC"
+    admin_password = "BismillahJuara"
+    admin = db.query(User).filter(User.username == admin_username).first()
+    if not admin:
+        password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt())
+        admin_user = User(username=admin_username, password_hash=password_hash, role="admin")
+        db.add(admin_user)
+        db.commit()
+        logging.info("Akun admin berhasil dibuat!")
+    else:
+        logging.info("Akun admin sudah ada.")
+
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create database tables on startup
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        create_admin_account(db)  # Pastikan akun admin dibuat
+        yield
+    finally:
+        db.close()
+
+# Initialize FastAPI with lifespan
+app = FastAPI(lifespan=lifespan)
+
+# Inisialisasi APIRouter dengan prefix /api
+router = APIRouter(prefix="/api")
+
 # Endpoint login
-@app.post("/api/login/")
+@router.post("/login/")
 async def login(user: UserLogin, db: Session = Depends(get_db)):
+    """
+    Authenticate user and generate JWT token.
+    - **username**: Username of the user.
+    - **password**: Password of the user.
+    Returns an access token and user role.
+    """
+    logging.info(f"Attempting login for user: {user.username}")
     user = authenticate_user(db, user.username, user.password)
     if not user:
+        logging.warning(f"Failed login attempt for user: {user.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     access_token = create_access_token({"sub": user.username})
+    logging.info(f"Successful login for user: {user.username}")
     return {"access_token": access_token, "role": user.role}
 
 # Endpoint untuk menyimpan respons
-@app.post("/api/responses/")
+@router.post("/responses/")
 async def create_response(
     response: ResponseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    sentimen_negatif = classify_sentiment(response.jawaban)
-    
-    jakarta_tz = pytz.timezone('Asia/Jakarta')
-    db_response = Response(
-        tanggal=datetime.now(jakarta_tz),
-        jawaban=response.jawaban,
-        sentimen_negatif=sentimen_negatif,
-        username=current_user.username
-    )
-    db.add(db_response)
-    db.commit()
-    return {"status": "success"}
+    """
+    Save a new response to the database.
+    - **jawaban**: The response text.
+    Returns a success message if the response is saved successfully.
+    """
+    try:
+        sentimen_negatif = classify_sentiment(response.jawaban)
+        jakarta_tz = pytz.timezone('Asia/Jakarta')
+        db_response = Response(
+            tanggal=datetime.now(jakarta_tz),
+            jawaban=response.jawaban,
+            sentimen_negatif=sentimen_negatif,
+            username=current_user.username
+        )
+        db.add(db_response)
+        db.commit()
+        return {"status": "success"}
+    except SQLAlchemyError as e:
+        logging.error(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred")
 
 # Endpoint untuk mendapatkan semua respons
-@app.get("/api/responses/")
+@router.get("/responses/")
 async def get_responses(db: Session = Depends(get_db)):
+    """
+    Retrieve all responses from the database.
+    Returns a list of responses with their details.
+    """
     responses = db.query(Response).all()
     return [
         {
@@ -146,14 +181,36 @@ async def get_responses(db: Session = Depends(get_db)):
     ]
 
 # Endpoint signup
-@app.post("/api/signup/")
-async def signup(username: str, password: str, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == username).first()
+@router.post("/signup/")
+async def signup(request: SignUpRequest, db: Session = Depends(get_db)):
+    """
+    Register a new user.
+    - **username**: Username of the new user.
+    - **password**: Password of the new user.
+    Returns a success message if the user is created successfully.
+    """
+    existing_user = db.query(User).filter(User.username == request.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
-    
-    password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-    new_user = User(username=username, password_hash=password_hash, role="user")
+    password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt())
+    new_user = User(username=request.username, password_hash=password_hash, role="user")
     db.add(new_user)
     db.commit()
     return {"message": "User created successfully"}
+
+# Handler untuk root dan favicon
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the Farmadise API!"}
+
+@app.get("/favicon.ico")
+async def favicon():
+    return {"message": "No favicon available."}
+
+# Tambahkan router ke aplikasi FastAPI
+app.include_router(router)
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
