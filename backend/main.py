@@ -8,7 +8,7 @@ from database import SessionLocal, engine, Base
 from models import Response, User
 from sentiment import classify_sentiment
 from jose import JWTError, jwt
-from pydantic import BaseModel, constr, validator
+from pydantic import BaseModel, constr, field_validator
 from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi.security import OAuth2PasswordBearer
@@ -34,7 +34,7 @@ class SignUpRequest(BaseModel):
     username: constr(min_length=3, max_length=50)  # Minimal 3 karakter, maksimal 50 karakter
     password: constr(min_length=8)  # Minimal 8 karakter
 
-    @validator("password")
+    @field_validator("password")
     def validate_password(cls, value):
         if not any(char.isdigit() for char in value):
             raise ValueError("Password must contain at least one digit.")
@@ -209,6 +209,15 @@ async def favicon():
 
 # Tambahkan router ke aplikasi FastAPI
 app.include_router(router)
+
+# Error handling global
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logging.error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
 
 if __name__ == "__main__":
     import uvicorn
