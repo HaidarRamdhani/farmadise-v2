@@ -129,24 +129,15 @@ def main_app():
         st.header("Daily Dashboard")
 
         # Ambil data dari backend
-        response = requests.get(f"{BACKEND_URL}/api/responses/")
+        response = requests.get(f"{BACKEND_URL}/api/daily-dashboard/")
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data)
 
             if not df.empty:
-                # Proses data untuk time series
-                df['tanggal'] = pd.to_datetime(df['tanggal']).dt.date
-                daily_sentiment = df.groupby('tanggal')['sentimen_negatif'].sum().reset_index()
-
-                # Deteksi anomali
-                daily_sentiment['anomaly'] = 0  # Default: bukan anomali
-                anomalies = detect_anomalies(daily_sentiment.copy())
-                daily_sentiment.loc[anomalies[anomalies['anomaly'] == 1].index, 'anomaly'] = 1
-
                 # Visualisasi dengan Plotly
                 fig = px.line(
-                    daily_sentiment,
+                    df,
                     x='tanggal',
                     y='sentimen_negatif',
                     title="Frekuensi Sentimen Negatif Harian",
@@ -155,8 +146,8 @@ def main_app():
 
                 # Sorot anomali
                 fig.add_scatter(
-                    x=daily_sentiment[daily_sentiment['anomaly'] == 1]['tanggal'],
-                    y=daily_sentiment[daily_sentiment['anomaly'] == 1]['sentimen_negatif'],
+                    x=df[df['anomaly'] == 1]['tanggal'],
+                    y=df[df['anomaly'] == 1]['sentimen_negatif'],
                     mode='markers',
                     marker=dict(color='red', size=10),
                     name='Anomali'
@@ -167,7 +158,6 @@ def main_app():
                 st.info("No responses found.")
         else:
             st.error("Failed to fetch dashboard data.")
-
 
     # Tab Database
     with tab_database:
@@ -195,3 +185,13 @@ else:
         if st.form_submit_button("Login"):
             if login(username, password):
                 st.rerun()
+
+    # Tambahkan tombol "Daftar di sini"
+    st.write("Belum memiliki akun?")
+    if st.button("Daftar di sini"):
+        with st.form("signup_form"):
+            new_username = st.text_input("New Username")
+            new_password = st.text_input("New Password", type="password")
+            if st.form_submit_button("Sign Up"):
+                if signup(new_username, new_password):
+                    st.rerun()
