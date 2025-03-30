@@ -131,7 +131,7 @@ else:
         password = st.text_input("Password", type="password")
         if st.form_submit_button("Login"):
             if login(username, password):
-                st.experimental_rerun()
+                st.rerun()
     
     st.write("Belum memiliki akun?")
     if st.button("Daftar di sini"):
